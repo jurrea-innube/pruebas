@@ -1,49 +1,38 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
-from uuid import uuid4
+from typing import Optional
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import BaseModel, Field
 
 
-def _default_room_name() -> str:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    return f"mock-room-{stamp}"
+class CallInputRow(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255, description="Debtor name")
+    room_id: str = Field(..., min_length=1, max_length=255, description="Room identifier")
+    monto_deuda: float = Field(..., ge=0, description="Debt amount")
+    fecha_limite: str = Field(..., min_length=1, max_length=100, description="Payment due date")
+    telefono: str = Field(..., min_length=1, max_length=50, description="Phone number")
 
 
-class ParticipantInput(BaseModel):
-    name: str = Field(min_length=1, description="Nombre visible en la transcripcion")
-    identity: str | None = Field(
-        default=None, description="Identidad tecnica del participante"
+class TranscriptSegment(BaseModel):
+    speaker: str = Field(..., min_length=1, max_length=20, description="Speaker role")
+    text: str = Field(..., min_length=1, description="Segment text")
+    start_time_seconds: float = Field(..., ge=0, description="Segment start second")
+    end_time_seconds: float = Field(..., ge=0, description="Segment end second")
+
+
+class Transcript(BaseModel):
+    language: str = Field(default="es", min_length=2, max_length=10)
+    sentiment_profile: str = Field(..., min_length=1, max_length=100)
+    segments: list[TranscriptSegment] = Field(default_factory=list)
+    full_text: str = Field(..., min_length=1)
+
+
+class CallSimulationResult(BaseModel):
+    room_name: str = Field(..., min_length=1, max_length=255, description="Room identifier")
+    call_tags: list[str] = Field(default_factory=list, description="Tags associated with the call")
+    participant_name: str = Field(..., min_length=1, max_length=255, description="Participant identifier")
+    transcript: Optional[Transcript] = Field(default=None, description="Full transcript data")
+    status: Optional[str] = Field(default=None, max_length=50, description="Call status")
+    call_duration_seconds: Optional[float] = Field(
+        default=None, description="Call duration in seconds (converted to integer)"
     )
-
-
-class MockLiveKitRequest(BaseModel):
-    call_id: str = Field(default_factory=lambda: f"call_{uuid4().hex[:10]}")
-    room_name: str = Field(default_factory=_default_room_name, min_length=3)
-    webhook_url: AnyHttpUrl | None = None
-    language: str = Field(default="es", min_length=2, max_length=8)
-    call_context: str = Field(
-        default="Llamada de seguimiento comercial y soporte al cliente."
-    )
-    objectives: list[str] = Field(
-        default_factory=lambda: [
-            "Entender la necesidad principal del cliente",
-            "Acordar un siguiente paso",
-        ]
-    )
-    turns: int = Field(default=8, ge=4, le=30)
-    user: ParticipantInput
-    agent: ParticipantInput = Field(
-        default_factory=lambda: ParticipantInput(
-            name="Agente virtual", identity="agent_virtual"
-        )
-    )
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class WebhookDeliveryResult(BaseModel):
-    delivered: bool
-    status_code: int
-    response_body: str
