@@ -189,7 +189,24 @@ async def simulate_csv(file: UploadFile = File(...)) -> dict:
 
     results = simulate_calls(rows)
     logger.info("Simulated %s calls from %s", len(results), filename)
+
+    categorized_results = []
+    for result in results:
+        data = result.model_dump()
+        categorized_results.append(
+            {
+                "transcript": data["transcript"],
+                "Outputs": {
+                    "room_name": data["room_name"],
+                    "call_tags": data["call_tags"],
+                    "participant_name": data["participant_name"],
+                    "status": data["status"],
+                    "call_duration_seconds": data["call_duration_seconds"],
+                },
+            }
+        )
+
     return {
         "input_rows": len(rows),
-        "results": [result.model_dump() for result in results],
+        "results": categorized_results,
     }

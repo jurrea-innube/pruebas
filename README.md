@@ -59,12 +59,14 @@ Juan Perez,room-002,9800,2026-03-11,+573004445566
 ## Salida por cada llamada
 
 ```python
-room_name: str
-call_tags: List[str]
-participant_name: str
 transcript: Optional[Transcript]
-status: Optional[str]
-call_duration_seconds: Optional[float]
+Outputs: {
+  room_name: str
+  call_tags: List[str]
+  participant_name: str
+  status: Optional[str]
+  call_duration_seconds: Optional[float]
+}
 ```
 
 `call_tags` puede incluir etiquetas como:
@@ -107,9 +109,6 @@ Respuesta ejemplo:
   "input_rows": 1,
   "results": [
     {
-      "room_name": "room-001",
-      "call_tags": ["agresivo", "insultos", "negativa"],
-      "participant_name": "Maria Lopez",
       "transcript": {
         "language": "es",
         "sentiment_profile": "agresiva_con_insultos",
@@ -123,8 +122,13 @@ Respuesta ejemplo:
         ],
         "full_text": "..."
       },
-      "status": "hostile_interaction",
-      "call_duration_seconds": 21.0
+      "Outputs": {
+        "room_name": "room-001",
+        "call_tags": ["agresivo", "insultos", "negativa", "intencion_futura"],
+        "participant_name": "Maria Lopez",
+        "status": "hostile_follow_up_required",
+        "call_duration_seconds": 21.0
+      }
     }
   ]
 }
