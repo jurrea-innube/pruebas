@@ -58,18 +58,18 @@ SCENARIOS = [
             "Estoy dispuesto a ordenar el pago y dejarlo solucionado.",
         ],
         user_commitment_lines=[
-            "Me comprometo a pagar el total antes de la fecha limite, exactamente el {fecha_compromiso}.",
-            "Confirmo pago total de {monto_total} el {fecha_compromiso}.",
-            "Si, pago completo el {fecha_compromiso} y envio comprobante por este medio.",
+            "Me comprometo a pagar el total antes de la fecha limite, exactamente {fecha_compromiso}.",
+            "Confirmo pago total de {monto_total} en {fecha_compromiso}.",
+            "Si, pago completo en {fecha_compromiso} y envio comprobante por este medio.",
         ],
         user_confirmation_lines=[
-            "Queda confirmado: pago total el {fecha_compromiso}.",
-            "Correcto, el {fecha_compromiso} hago la transferencia completa.",
+            "Queda confirmado: pago total en {fecha_compromiso}.",
+            "Correcto, en {fecha_compromiso} hago la transferencia completa.",
             "Confirmado, cumplo ese dia con el monto total.",
         ],
         agent_resolution_lines=[
-            "Perfecto, registro compromiso de pago total por {monto_total} para el {fecha_compromiso}.",
-            "Queda asentado acuerdo de pago completo el {fecha_compromiso}, sin cambios adicionales.",
+            "Perfecto, registro compromiso de pago total por {monto_total} para {fecha_compromiso}.",
+            "Queda asentado acuerdo de pago completo en {fecha_compromiso}, sin cambios adicionales.",
         ],
     ),
     Scenario(
@@ -184,18 +184,18 @@ SCENARIOS = [
             "Mi intencion es cumplir, solo que requiero fraccionar el pago.",
         ],
         user_commitment_lines=[
-            "Me comprometo a un primer abono de {monto_abono} el {fecha_compromiso} y luego revisamos el saldo.",
-            "Puedo pagar {monto_abono} el {fecha_compromiso}; el resto lo cubro con un plan.",
-            "Confirmo abono inicial de {monto_abono} el {fecha_compromiso} para empezar a regularizar.",
+            "Me comprometo a un primer abono de {monto_abono} en {fecha_compromiso} y luego revisamos el saldo.",
+            "Puedo pagar {monto_abono} en {fecha_compromiso}; el resto lo cubro con un plan.",
+            "Confirmo abono inicial de {monto_abono} en {fecha_compromiso} para empezar a regularizar.",
         ],
         user_confirmation_lines=[
-            "Confirmado: primer abono {monto_abono} el {fecha_compromiso}.",
+            "Confirmado: primer abono {monto_abono} en {fecha_compromiso}.",
             "Si, ese abono inicial queda comprometido en esa fecha.",
-            "Queda claro, inicio con {monto_abono} el {fecha_compromiso}.",
+            "Queda claro, inicio con {monto_abono} en {fecha_compromiso}.",
         ],
         agent_resolution_lines=[
-            "Registro acuerdo parcial: abono inicial de {monto_abono} para el {fecha_compromiso} y seguimiento del saldo.",
-            "Queda asentado compromiso parcial con primer pago de {monto_abono} el {fecha_compromiso}.",
+            "Registro acuerdo parcial: abono inicial de {monto_abono} para {fecha_compromiso} y seguimiento del saldo.",
+            "Queda asentado compromiso parcial con primer pago de {monto_abono} en {fecha_compromiso}.",
         ],
     ),
 ]
@@ -331,9 +331,9 @@ def _pick_commitment_date(fecha_limite: str) -> str:
     options = [
         f"antes del {fecha_limite}",
         f"el mismo {fecha_limite}",
-        "el proximo lunes",
-        "el proximo martes",
-        "el viernes de esta semana",
+        "proximo lunes",
+        "proximo martes",
+        "viernes de esta semana",
     ]
     return random.choice(options)
 
