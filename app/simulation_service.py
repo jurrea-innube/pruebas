@@ -317,7 +317,7 @@ def _build_user_message_item(text: str, timeline: float) -> tuple[dict, float]:
         "role": "user",
         "content": [text],
         "interrupted": False,
-        "transcript_confidence": round(random.uniform(0.95, 1.0), 3),
+        "transcript_confidence": 1,
         "extra": {},
         "metrics": {
             "started_speaking_at": start,
