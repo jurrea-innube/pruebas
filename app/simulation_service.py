@@ -1,360 +1,415 @@
 from __future__ import annotations
 
 import random
+import string
+import time
 from dataclasses import dataclass
 from typing import Literal
+from uuid import uuid4
 
-from app.schemas import CallInputRow, CallSimulationResult, Transcript, TranscriptSegment
+from app.schemas import CallInput, CallSimulationResult, Transcript
 
 
 @dataclass(frozen=True)
 class Scenario:
     name: str
     tags: list[str]
-    status: str
-    commitment_mode: Literal[
-        "acuerdo_total",
-        "acuerdo_parcial",
-        "intencion_sin_fecha",
-        "intencion_futura",
-        "hostil_con_intencion_futura",
-    ]
+    commitment_mode: Literal["full", "partial", "future", "uncertain", "aggressive_future"]
     user_opening_lines: list[str]
     user_commitment_lines: list[str]
     user_confirmation_lines: list[str]
-    agent_resolution_lines: list[str]
+    assistant_resolution_lines: list[str]
 
-
-AGENT_OPENING_LINES = [
-    "Buenas tardes, le saluda Laura del equipo de cobranzas. Esta llamada es para regularizar su cuenta de forma respetuosa y encontrar un compromiso de pago.",
-    "Gracias por atender. Mi objetivo es acordar con usted un plan claro y realista para resolver la deuda.",
-]
-
-AGENT_COMMITMENT_ASK_LINES = [
-    "Para avanzar hoy necesito un compromiso concreto: fecha exacta de pago total o, si no es posible, fecha y monto de un primer abono.",
-    "Le propongo cerrar esta llamada con un acuerdo verificable. Puede indicarme una fecha y un monto de pago?",
-]
-
-AGENT_RESPECT_CONTROL_LINES = [
-    "Entiendo su molestia. Mantendre un tono profesional y le pido respeto para poder ayudarle de forma efectiva.",
-    "Comprendo que la situacion incomoda. Mi intencion es resolver, no confrontar; por favor continuemos con respeto.",
-]
 
 SCENARIOS = [
     Scenario(
-        name="positiva",
-        tags=[
-            "positiva",
-            "compromiso_de_pago",
-            "acuerdo_total",
-            "colaborativo",
-            "cierre_exitoso",
-        ],
-        status="commitment_registered",
-        commitment_mode="acuerdo_total",
+        name="pago_total",
+        tags=["contestada", "positiva", "pago_total", "compromiso_de_pago"],
+        commitment_mode="full",
         user_opening_lines=[
-            "Gracias por llamar. Si quiero ponerme al dia y cerrar esta deuda.",
-            "De acuerdo, quiero resolver esto hoy y evitar mas recargos.",
-            "Estoy dispuesto a ordenar el pago y dejarlo solucionado.",
+            "Gracias por llamar, quiero resolver la deuda completa.",
+            "Estoy dispuesto a liquidar hoy para cerrar el caso.",
+            "Si, quiero dejar esta cuenta al dia con pago total.",
         ],
         user_commitment_lines=[
-            "Me comprometo a pagar el total antes de la fecha limite, exactamente {fecha_compromiso}.",
-            "Confirmo pago total de {monto_total} en {fecha_compromiso}.",
-            "Si, pago completo en {fecha_compromiso} y envio comprobante por este medio.",
+            "Confirmo pago total de {total_amount} para {payment_date}.",
+            "Puedo liquidar {total_amount} en {payment_date}.",
+            "Me comprometo a pagar todo el saldo ({total_amount}) en {payment_date}.",
         ],
         user_confirmation_lines=[
-            "Queda confirmado: pago total en {fecha_compromiso}.",
-            "Correcto, en {fecha_compromiso} hago la transferencia completa.",
-            "Confirmado, cumplo ese dia con el monto total.",
+            "Confirmado, pago total en {payment_date}.",
+            "Si, quedamos con pago completo para {payment_date}.",
+            "De acuerdo, liquido el total en esa fecha.",
         ],
-        agent_resolution_lines=[
-            "Perfecto, registro compromiso de pago total por {monto_total} para {fecha_compromiso}.",
-            "Queda asentado acuerdo de pago completo en {fecha_compromiso}, sin cambios adicionales.",
+        assistant_resolution_lines=[
+            "Perfecto, registro compromiso de pago total por {total_amount} en {payment_date}.",
+            "Queda documentado pago completo de {total_amount} para {payment_date}.",
         ],
     ),
     Scenario(
-        name="neutra",
-        tags=[
-            "neutra",
-            "intencion_sin_fecha",
-            "indecision",
-            "seguimiento_requerido",
-            "solicita_informacion",
-        ],
-        status="follow_up_needed",
-        commitment_mode="intencion_sin_fecha",
+        name="pago_parcial",
+        tags=["contestada", "pago_parcial", "compromiso_de_pago", "negociacion"],
+        commitment_mode="partial",
         user_opening_lines=[
-            "Quiero pagar, pero hoy no puedo confirmar una fecha exacta.",
-            "Tengo intencion de regularizar, aunque aun no se el dia de pago.",
-            "Me interesa resolver, pero todavia no tengo liquidez definida.",
+            "No tengo el monto completo, pero si puedo hacer un abono.",
+            "Quiero pagar, aunque por ahora solo me alcanza para una parte.",
+            "Me interesa resolver, pero necesito comenzar con pago parcial.",
         ],
         user_commitment_lines=[
-            "No puedo comprometer fecha de pago hoy; necesito revisar ingresos y confirmar el {fecha_seguimiento}.",
-            "Mi intencion es pagar, pero aun no se cuando. Le confirmo una fecha concreta el {fecha_seguimiento}.",
-            "Hoy no puedo fijar monto ni fecha; me comprometo a definirlo y responder el {fecha_seguimiento}.",
+            "Puedo pagar {partial_amount} en {payment_date}.",
+            "Me comprometo con un abono de {partial_amount} para {payment_date}.",
+            "Solo puedo cubrir {partial_amount} en {payment_date}.",
         ],
         user_confirmation_lines=[
-            "Queda claro: hoy sin fecha de pago, y el {fecha_seguimiento} le confirmo compromiso concreto.",
-            "Si, el {fecha_seguimiento} le doy fecha exacta y monto.",
-            "Confirmado, le contacto el {fecha_seguimiento} con definicion final.",
+            "Confirmado: {partial_amount} en {payment_date}.",
+            "Si, esa es mi propuesta de pago parcial.",
+            "Quedamos con ese monto y esa fecha.",
         ],
-        agent_resolution_lines=[
-            "Registro intencion de pago sin fecha definitiva. Seguimiento pactado para el {fecha_seguimiento}.",
-            "Dejo asentado que hoy no hay fecha concreta y que usted confirmara compromiso el {fecha_seguimiento}.",
+        assistant_resolution_lines=[
+            "Registro abono parcial de {partial_amount} para {payment_date}; el saldo restante queda en seguimiento.",
+            "Queda documentado pago parcial de {partial_amount} en {payment_date}.",
         ],
     ),
     Scenario(
-        name="negativa",
-        tags=[
-            "negativa",
-            "resistencia_pago",
-            "intencion_futura",
-            "alto_riesgo",
-            "seguimiento_requerido",
-        ],
-        status="escalation_review",
-        commitment_mode="intencion_futura",
+        name="intencion_futura",
+        tags=["contestada", "intencion_futura", "indecision", "seguimiento_requerido"],
+        commitment_mode="future",
         user_opening_lines=[
-            "Hoy no voy a pagar, tengo otras prioridades inmediatas.",
-            "No puedo resolver en este momento, necesito mas tiempo.",
-            "Ahora no tengo capacidad de pago y no quiero comprometer algo que no cumplire.",
+            "Si quiero pagar, pero hoy no puedo comprometer monto.",
+            "Tengo intencion de pago, solo que no tengo fecha exacta aun.",
+            "Necesito unos dias para confirmar cuanto podre cubrir.",
         ],
         user_commitment_lines=[
-            "No pago hoy. Mi intencion es revisar esto en {mes_futuro} y evaluar un abono inicial.",
-            "No acepto pago inmediato; podria considerar un pago en {mes_futuro} si mejora mi flujo.",
-            "Hoy no me comprometo con monto, pero mi intencion futura es retomar en {mes_futuro}.",
+            "No puedo confirmar pago hoy; me comprometo a definir fecha y monto en {follow_up_date}.",
+            "Mi intencion es pagar, y en {follow_up_date} le confirmo un compromiso claro.",
+            "Necesito revisar flujo; en {follow_up_date} le doy monto y fecha.",
         ],
         user_confirmation_lines=[
-            "Dejemoslo asi: sin pago hoy, posible gestion en {mes_futuro}.",
-            "Repito: hoy no pago, y reviso nuevamente en {mes_futuro}.",
-            "Confirmo que mi intencion es retomar el caso en {mes_futuro}.",
+            "Correcto, en {follow_up_date} confirmo el compromiso.",
+            "Queda claro: hoy sin pago, con definicion para {follow_up_date}.",
+            "Si, esa sera mi fecha para responder formalmente.",
         ],
-        agent_resolution_lines=[
-            "Registro ausencia de compromiso inmediato y declaracion de intencion futura para {mes_futuro}.",
-            "Queda documentado que hoy no hay acuerdo de pago y que usted solicita retomar en {mes_futuro}.",
+        assistant_resolution_lines=[
+            "Registro intencion futura sin fecha cerrada de pago; seguimiento pactado para {follow_up_date}.",
+            "Queda documentado que hoy no hay pago confirmado y que usted definira condiciones en {follow_up_date}.",
+        ],
+    ),
+    Scenario(
+        name="negativa_sin_compromiso",
+        tags=["contestada", "negativa", "sin_compromiso", "resistencia_pago"],
+        commitment_mode="uncertain",
+        user_opening_lines=[
+            "No puedo pagar ahora y tampoco puedo prometer fecha.",
+            "No tengo forma de comprometer pago en este momento.",
+            "Hoy no voy a acordar monto ni dia.",
+        ],
+        user_commitment_lines=[
+            "No puedo asumir compromiso de pago hoy.",
+            "Prefiero no dejar fecha hasta que tenga claridad.",
+            "Por ahora no hay compromiso, necesito revisar primero.",
+        ],
+        user_confirmation_lines=[
+            "Si, dejelo como pendiente sin fecha definida.",
+            "No puedo confirmar nada por ahora.",
+            "Correcto, seguimos sin compromiso concreto.",
+        ],
+        assistant_resolution_lines=[
+            "Registro llamada sin compromiso de pago. Se agenda seguimiento preventivo.",
+            "Queda documentado que no se logro acuerdo ni fecha de pago en esta llamada.",
         ],
     ),
     Scenario(
         name="agresiva_con_insultos",
-        tags=[
-            "agresivo",
-            "insultos",
-            "negativa",
-            "intencion_futura",
-            "riesgo_quiebre_llamada",
-            "contencion_emocional",
-        ],
-        status="hostile_follow_up_required",
-        commitment_mode="hostil_con_intencion_futura",
+        tags=["contestada", "agresivo", "insultos", "intencion_futura", "contencion_emocional"],
+        commitment_mode="aggressive_future",
         user_opening_lines=[
-            "Siempre llaman a molestar, ya estoy cansado de ustedes.",
-            "No soporto estas llamadas, me tienen harto con la cobranza.",
-            "Dejen de insistir, esta gestion me parece abusiva.",
+            "Siempre llaman a fastidiar, ya estoy cansado de esta cobranza.",
+            "No me presione, esto me tiene harto.",
+            "No quiero problemas, pero no voy a pagar hoy.",
         ],
         user_commitment_lines=[
-            "No voy a pagar hoy. Tal vez en {mes_futuro} revise si puedo hacer un abono.",
-            "No me comprometo ahora; si decido pagar sera en {mes_futuro}.",
-            "Hoy no hay pago. Si mejora mi situacion, en {mes_futuro} veo si pago algo.",
+            "No voy a pagar hoy; tal vez en {follow_up_date} revise un posible abono.",
+            "No me comprometo ahora, pero en {follow_up_date} podria definir algo.",
+            "Si mejora mi situacion, en {follow_up_date} le digo cuanto puedo pagar.",
         ],
         user_confirmation_lines=[
-            "Anote eso y no insistan antes: sin pago hoy, posible revision en {mes_futuro}.",
-            "Ya dije mi postura: hoy no pago y vere en {mes_futuro}.",
-            "Queda claro: ahora no, quizas en {mes_futuro}.",
+            "Anote eso: hoy no pago y en {follow_up_date} le confirmo.",
+            "Si, en esa fecha podria revisar una opcion.",
+            "Correcto, de momento no hay pago hoy.",
         ],
-        agent_resolution_lines=[
-            "Registro interaccion hostil y ausencia de compromiso inmediato; posible revision del pago en {mes_futuro}.",
-            "Dejo documentado que hoy no hay acuerdo y que usted menciona una posible gestion en {mes_futuro}.",
-        ],
-    ),
-    Scenario(
-        name="estres_financiero",
-        tags=[
-            "preocupacion",
-            "estres_financiero",
-            "acuerdo_parcial",
-            "negociacion",
-            "posible_acuerdo",
-            "requiere_plan_pago",
-        ],
-        status="partial_commitment_registered",
-        commitment_mode="acuerdo_parcial",
-        user_opening_lines=[
-            "Quiero pagar, pero no tengo capacidad para cubrir el total hoy.",
-            "Estoy en estres financiero y necesito una opcion por etapas.",
-            "Mi intencion es cumplir, solo que requiero fraccionar el pago.",
-        ],
-        user_commitment_lines=[
-            "Me comprometo a un primer abono de {monto_abono} en {fecha_compromiso} y luego revisamos el saldo.",
-            "Puedo pagar {monto_abono} en {fecha_compromiso}; el resto lo cubro con un plan.",
-            "Confirmo abono inicial de {monto_abono} en {fecha_compromiso} para empezar a regularizar.",
-        ],
-        user_confirmation_lines=[
-            "Confirmado: primer abono {monto_abono} en {fecha_compromiso}.",
-            "Si, ese abono inicial queda comprometido en esa fecha.",
-            "Queda claro, inicio con {monto_abono} en {fecha_compromiso}.",
-        ],
-        agent_resolution_lines=[
-            "Registro acuerdo parcial: abono inicial de {monto_abono} para {fecha_compromiso} y seguimiento del saldo.",
-            "Queda asentado compromiso parcial con primer pago de {monto_abono} en {fecha_compromiso}.",
+        assistant_resolution_lines=[
+            "Entiendo su molestia y mantendre trato profesional. Registro seguimiento para {follow_up_date} sin compromiso inmediato.",
+            "Dejo trazabilidad de tono hostil con intencion futura de revision en {follow_up_date}.",
         ],
     ),
 ]
 
 
-def simulate_calls(rows: list[CallInputRow]) -> list[CallSimulationResult]:
+def simulate_calls(rows: list[CallInput]) -> list[CallSimulationResult]:
     return [simulate_single_call(row) for row in rows]
 
 
-def simulate_single_call(row: CallInputRow) -> CallSimulationResult:
+def simulate_single_call(call_input: CallInput) -> CallSimulationResult:
     scenario = random.choice(SCENARIOS)
-    transcript = _build_transcript(row, scenario)
-    total_duration = transcript.segments[-1].end_time_seconds if transcript.segments else 0.0
+    room_name = call_input.room_name or _random_room_name()
+    transcript_items, duration_seconds, function_result_tag = _build_transcript_items(call_input, scenario)
+    tags = _merge_tags(scenario.tags, function_result_tag)
 
     return CallSimulationResult(
-        room_name=row.room_id,
-        call_tags=scenario.tags,
-        participant_name=row.name,
-        transcript=transcript,
-        status=scenario.status,
-        call_duration_seconds=float(int(round(total_duration))),
+        room_name=room_name,
+        transcript=Transcript(items=transcript_items),
+        status="completed",
+        call_tags=tags,
+        participant_name=call_input.phone_number,
+        call_duration_seconds=round(duration_seconds, 6),
     )
 
 
-def _build_transcript(row: CallInputRow, scenario: Scenario) -> Transcript:
-    amount = _format_amount(row.monto_deuda)
-    commitment_date = _pick_commitment_date(row.fecha_limite)
-    followup_date = _pick_follow_up_date(row.fecha_limite)
-    future_month = _pick_future_month()
-    partial_payment = _format_amount(max(row.monto_deuda * random.uniform(0.2, 0.5), 1.0))
+def _build_transcript_items(
+    call_input: CallInput, scenario: Scenario
+) -> tuple[list[dict], float, str]:
+    total_amount = _format_amount(call_input.debt_amount)
+    partial_amount_value = max(round(call_input.debt_amount * random.uniform(0.25, 0.55), 2), 1.0)
+    partial_amount = _format_amount(partial_amount_value)
+    payment_date = _pick_payment_date(call_input.due_date)
+    follow_up_date = _pick_follow_up_date(call_input.due_date)
 
     text_ctx = {
-        "monto_total": amount,
-        "monto_abono": partial_payment,
-        "fecha_compromiso": commitment_date,
-        "fecha_seguimiento": followup_date,
-        "mes_futuro": future_month,
+        "total_amount": total_amount,
+        "partial_amount": partial_amount,
+        "payment_date": payment_date,
+        "follow_up_date": follow_up_date,
     }
 
     opening_user = _render(random.choice(scenario.user_opening_lines), text_ctx)
     commitment_user = _render(random.choice(scenario.user_commitment_lines), text_ctx)
     confirmation_user = _render(random.choice(scenario.user_confirmation_lines), text_ctx)
-    resolution_line = _render(random.choice(scenario.agent_resolution_lines), text_ctx)
-    opening_agent = random.choice(AGENT_OPENING_LINES)
-    commitment_ask = random.choice(AGENT_COMMITMENT_ASK_LINES)
-    respect_control = random.choice(AGENT_RESPECT_CONTROL_LINES)
+    resolution_line = _render(random.choice(scenario.assistant_resolution_lines), text_ctx)
 
-    lines = [
-        ("agent", opening_agent),
-        (
-            "agent",
-            f"Le contacto por la cuenta de {row.name}. El saldo pendiente es de {amount} con fecha limite {row.fecha_limite}.",
-        ),
+    greeting_user = random.choice(["Bueno.", "Hola.", "Si, quien habla?"])
+    greeting_assistant = (
+        f"Hola {call_input.name}, soy Laura del equipo de cobranza. "
+        f"Tu deuda actual es de {total_amount} pesos y la fecha limite es {call_input.due_date}."
+    )
+    commitment_question = (
+        "Busco un compromiso claro en esta llamada: fecha y monto exactos de pago total "
+        "o de un abono inicial. Que propuesta puedes confirmar?"
+    )
+    clarify_question = (
+        "Para dejarlo formal, confirmame el monto y la fecha exacta para registrar el acuerdo."
+    )
+
+    conversation = [
+        ("user", greeting_user),
+        ("assistant", greeting_assistant),
         ("user", opening_user),
-        (
-            "agent",
-            "Gracias por compartir su situacion. Voy a explicarle opciones reales para evitar mayor mora.",
-        ),
-        (
-            "agent",
-            commitment_ask,
-        ),
+        ("assistant", commitment_question),
+        ("user", commitment_user),
+        ("assistant", clarify_question),
+        ("user", confirmation_user),
+        ("assistant", resolution_line),
     ]
 
-    if scenario.commitment_mode == "hostil_con_intencion_futura":
-        lines.append(("agent", respect_control))
-
-    lines.extend(
-        [
-            ("user", commitment_user),
+    if scenario.commitment_mode == "aggressive_future":
+        conversation.insert(
+            4,
             (
-                "agent",
-                "Entendido. Confirmo lo que acaba de indicar y necesito su validacion final para dejar trazabilidad.",
+                "assistant",
+                "Entiendo que estes molesto. Mantendre un tono profesional y te pido respeto para poder ayudarte.",
             ),
-            ("user", confirmation_user),
-            ("agent", resolution_line),
-            (
-                "agent",
-                f"Registro de cierre: contacto {row.telefono}, estado {scenario.status}, siguiente control operativo segun lo acordado.",
-            ),
-        ]
-    )
+        )
 
-    if scenario.commitment_mode in {"acuerdo_total", "acuerdo_parcial"}:
-        lines.append(
-            (
-                "agent",
-                "Le agradezco la disposicion. Si cumple en la fecha indicada, podremos estabilizar su cuenta sin escalar la gestion.",
-            )
+    if scenario.commitment_mode in {"full", "partial"}:
+        final_assistant_line = (
+            "Gracias por confirmar. Si cumples ese compromiso, avanzaremos con la regularizacion sin escalar la gestion."
         )
     else:
-        lines.append(
-            (
-                "agent",
-                "Gracias por la claridad. Daremos seguimiento puntual segun su intencion declarada para mantener la gestion ordenada.",
-            )
+        final_assistant_line = (
+            "Gracias por la claridad. Dejo seguimiento activo para retomar en la fecha indicada."
         )
+    conversation.append(("assistant", final_assistant_line))
 
-    current_time = 0.0
-    segments: list[TranscriptSegment] = []
-    for speaker, text in lines:
-        pause = random.uniform(0.2, 0.8)
-        duration = random.uniform(1.4, 3.1)
-        start_time = current_time + pause
-        end_time = start_time + duration
-        current_time = end_time
-        segments.append(
-            TranscriptSegment(
-                speaker=speaker,
-                text=text,
-                start_time_seconds=round(start_time, 3),
-                end_time_seconds=round(end_time, 3),
-            )
-        )
+    base_clock = time.time() - random.uniform(8.0, 30.0)
+    timeline = base_clock
+    first_start: float | None = None
+    last_stop: float = timeline
+    items: list[dict] = []
 
-    return Transcript(
-        language="es",
-        sentiment_profile=scenario.name,
-        segments=segments,
-        full_text=" ".join(segment.text for segment in segments),
+    items.append(
+        {
+            "id": _item_id(),
+            "type": "agent_handoff",
+            "new_agent_id": "outbound_caller",
+        }
     )
+
+    for role, text in conversation:
+        if role == "user":
+            item, timeline = _build_user_message_item(text, timeline)
+        else:
+            interrupted = random.random() < 0.14
+            item, timeline = _build_assistant_message_item(text, timeline, interrupted=interrupted)
+        started = item["metrics"]["started_speaking_at"]
+        stopped = item["metrics"]["stopped_speaking_at"]
+        first_start = started if first_start is None else min(first_start, started)
+        last_stop = max(last_stop, stopped)
+        items.append(item)
+
+    function_call_item, function_output_item, function_result_tag = _build_function_items(
+        scenario=scenario,
+        total_amount=total_amount,
+        partial_amount=partial_amount,
+        payment_date=payment_date,
+        follow_up_date=follow_up_date,
+    )
+    items.append(function_call_item)
+    items.append(function_output_item)
+
+    duration = max(last_stop - (first_start or last_stop), 0.0)
+    return items, duration, function_result_tag
 
 
 def _format_amount(value: float) -> str:
-    return f"{value:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
 def _render(template: str, context: dict[str, str]) -> str:
     return template.format(**context)
 
 
-def _pick_commitment_date(fecha_limite: str) -> str:
-    options = [
-        f"antes del {fecha_limite}",
-        f"el mismo {fecha_limite}",
-        "proximo lunes",
-        "proximo martes",
-        "viernes de esta semana",
-    ]
+def _pick_payment_date(due_date: str) -> str:
+    options = [due_date, f"un dia antes de {due_date}", f"el mismo {due_date}", "el proximo lunes"]
     return random.choice(options)
 
 
-def _pick_follow_up_date(fecha_limite: str) -> str:
+def _pick_follow_up_date(due_date: str) -> str:
     options = [
         "manana antes de las 5:00 p.m.",
         "en 48 horas",
-        f"dos dias antes del {fecha_limite}",
+        f"dos dias antes de {due_date}",
         "el proximo miercoles en la manana",
         "el cierre de esta semana",
     ]
     return random.choice(options)
 
 
-def _pick_future_month() -> str:
-    return random.choice(
-        [
-            "la primera semana del proximo mes",
-            "la segunda quincena del proximo mes",
-            "fin de mes",
-            "el siguiente ciclo de pago",
-        ]
-    )
+def _random_room_name() -> str:
+    token = "".join(random.choices(string.ascii_letters + string.digits, k=12))
+    return f"room-{token}"
+
+
+def _item_id() -> str:
+    return f"item_{uuid4().hex[:12]}"
+
+
+def _call_id() -> str:
+    return "call_" + "".join(random.choices(string.ascii_lowercase + string.digits, k=20))
+
+
+def _build_user_message_item(text: str, timeline: float) -> tuple[dict, float]:
+    start = timeline + random.uniform(0.55, 1.9)
+    stop = start + random.uniform(0.75, 4.2)
+    item = {
+        "id": _item_id(),
+        "type": "message",
+        "role": "user",
+        "content": [text],
+        "interrupted": False,
+        "transcript_confidence": round(random.uniform(0.95, 1.0), 3),
+        "extra": {},
+        "metrics": {
+            "started_speaking_at": start,
+            "stopped_speaking_at": stop,
+            "transcription_delay": random.uniform(0.25, 0.45),
+            "end_of_turn_delay": random.uniform(0.45, 0.7),
+            "on_user_turn_completed_delay": random.uniform(0.0000004, 0.0000042),
+        },
+    }
+    return item, stop
+
+
+def _build_assistant_message_item(text: str, timeline: float, interrupted: bool) -> tuple[dict, float]:
+    start = timeline + random.uniform(0.65, 2.2)
+    stop = start + random.uniform(1.0, 6.8)
+    item = {
+        "id": _item_id(),
+        "type": "message",
+        "role": "assistant",
+        "content": [text],
+        "interrupted": interrupted,
+        "extra": {},
+        "metrics": {
+            "started_speaking_at": start,
+            "stopped_speaking_at": stop,
+            "llm_node_ttft": random.uniform(0.6, 1.6),
+            "tts_node_ttfb": random.uniform(0.4, 0.95),
+            "e2e_latency": random.uniform(1.4, 3.6),
+        },
+    }
+    return item, stop
+
+
+def _build_function_items(
+    scenario: Scenario,
+    total_amount: str,
+    partial_amount: str,
+    payment_date: str,
+    follow_up_date: str,
+) -> tuple[dict, dict, str]:
+    call_id = _call_id()
+
+    if scenario.commitment_mode == "full":
+        fn_name = "confirm_payment_custom"
+        arguments = {"payment_amount": total_amount, "payment_date": payment_date}
+        output = "full_payment_confirmed"
+        tag = "pago_total"
+    elif scenario.commitment_mode == "partial":
+        fn_name = "confirm_payment_custom"
+        arguments = {"payment_amount": partial_amount, "payment_date": payment_date}
+        output = "custom_payment_confirmed"
+        tag = "pago_parcial"
+    elif scenario.commitment_mode in {"future", "aggressive_future"}:
+        fn_name = "schedule_follow_up_custom"
+        arguments = {"payment_amount": "to_define", "payment_date": follow_up_date}
+        output = "follow_up_scheduled"
+        tag = "seguimiento_requerido"
+    else:
+        fn_name = "schedule_follow_up_custom"
+        arguments = {"payment_amount": "unknown", "payment_date": "pending_confirmation"}
+        output = "follow_up_required"
+        tag = "sin_compromiso"
+
+    function_call_item = {
+        "id": f"{_item_id()}/fnc_0",
+        "type": "function_call",
+        "call_id": call_id,
+        "arguments": _json_string(arguments),
+        "name": fn_name,
+        "extra": {},
+    }
+    function_output_item = {
+        "id": _item_id(),
+        "type": "function_call_output",
+        "name": fn_name,
+        "call_id": call_id,
+        "output": output,
+        "is_error": False,
+    }
+    return function_call_item, function_output_item, tag
+
+
+def _json_string(payload: dict[str, str]) -> str:
+    parts = []
+    for key, value in payload.items():
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        parts.append(f'"{key}":"{escaped}"')
+    return "{" + ",".join(parts) + "}"
+
+
+def _merge_tags(base_tags: list[str], extra_tag: str) -> list[str]:
+    merged = list(base_tags)
+    if extra_tag not in merged:
+        merged.append(extra_tag)
+    return merged

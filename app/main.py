@@ -6,7 +6,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 
 from app.csv_service import parse_csv_rows
-from app.simulation_service import simulate_calls
+from app.schemas import CallInput
+from app.simulation_service import simulate_calls, simulate_single_call
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("livekit-mock")
 
-app = FastAPI(title="LiveKit Mock CSV Simulator", version="0.2.0")
+app = FastAPI(title="LiveKit Mock Simulator", version="0.3.0")
 
 
 HTML_PAGE = """
@@ -23,7 +24,7 @@ HTML_PAGE = """
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LiveKit Mock - CSV Simulator</title>
+    <title>LiveKit Mock - Simulator</title>
     <style>
       :root {
         color-scheme: dark;
@@ -103,10 +104,10 @@ HTML_PAGE = """
   <body>
     <main class="container">
       <section class="card">
-        <h1 class="title">LiveKit Mock - Simulador local por CSV</h1>
+        <h1 class="title">LiveKit Mock - Simulador local</h1>
         <p class="hint">
-          Suba un CSV con columnas: <b>name, room_id, monto_deuda, fecha limite, telefono</b>.
-          El resultado JSON se mostrara abajo.
+          Suba un CSV con columnas: <b>phone_number, name, debt_amount, due_date</b>.
+          Tambien puede usar la API JSON en <b>POST /api/simulate-call</b>.
         </p>
         <div class="row">
           <input id="csvFile" type="file" accept=".csv,text/csv" />
@@ -175,6 +176,13 @@ async def home() -> str:
     return HTML_PAGE
 
 
+@app.post("/api/simulate-call")
+async def simulate_call(payload: CallInput) -> dict:
+    result = simulate_single_call(payload)
+    logger.info("Simulated single call for participant %s", payload.phone_number)
+    return result.model_dump()
+
+
 @app.post("/api/simulate-csv")
 async def simulate_csv(file: UploadFile = File(...)) -> dict:
     filename = file.filename or ""
@@ -189,24 +197,7 @@ async def simulate_csv(file: UploadFile = File(...)) -> dict:
 
     results = simulate_calls(rows)
     logger.info("Simulated %s calls from %s", len(results), filename)
-
-    categorized_results = []
-    for result in results:
-        data = result.model_dump()
-        categorized_results.append(
-            {
-                "transcript": data["transcript"],
-                "Outputs": {
-                    "room_name": data["room_name"],
-                    "call_tags": data["call_tags"],
-                    "participant_name": data["participant_name"],
-                    "status": data["status"],
-                    "call_duration_seconds": data["call_duration_seconds"],
-                },
-            }
-        )
-
     return {
         "input_rows": len(rows),
-        "results": categorized_results,
+        "results": [result.model_dump() for result in results],
     }

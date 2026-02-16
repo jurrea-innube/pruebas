@@ -5,34 +5,43 @@ import io
 import re
 import unicodedata
 
-from app.schemas import CallInputRow
+from app.schemas import CallInput
 
-REQUIRED_FIELDS = {"name", "room_id", "monto_deuda", "fecha_limite", "telefono"}
+REQUIRED_FIELDS = {"phone_number", "name", "debt_amount", "due_date"}
 
 HEADER_ALIASES = {
+    "phone_number": "phone_number",
+    "phone": "phone_number",
+    "telefono": "phone_number",
+    "telefono_contacto": "phone_number",
+    "celular": "phone_number",
+    "participant_name": "phone_number",
     "name": "name",
     "nombre": "name",
     "persona": "name",
-    "room_id": "room_id",
-    "roomid": "room_id",
-    "room": "room_id",
-    "sala": "room_id",
-    "monto_deuda": "monto_deuda",
-    "montodeuda": "monto_deuda",
-    "monto": "monto_deuda",
-    "deuda": "monto_deuda",
-    "fecha_limite": "fecha_limite",
-    "fechalimite": "fecha_limite",
-    "fecha_vencimiento": "fecha_limite",
-    "vencimiento": "fecha_limite",
-    "telefono": "telefono",
-    "telefono_contacto": "telefono",
-    "phone": "telefono",
-    "celular": "telefono",
+    "debt_amount": "debt_amount",
+    "debt": "debt_amount",
+    "amount": "debt_amount",
+    "monto_deuda": "debt_amount",
+    "montodeuda": "debt_amount",
+    "monto": "debt_amount",
+    "deuda": "debt_amount",
+    "due_date": "due_date",
+    "duedate": "due_date",
+    "due": "due_date",
+    "fecha_limite": "due_date",
+    "fechalimite": "due_date",
+    "fecha_vencimiento": "due_date",
+    "vencimiento": "due_date",
+    "room_name": "room_name",
+    "room_id": "room_name",
+    "roomid": "room_name",
+    "room": "room_name",
+    "sala": "room_name",
 }
 
 
-def parse_csv_rows(content: bytes) -> list[CallInputRow]:
+def parse_csv_rows(content: bytes) -> list[CallInput]:
     decoded = content.decode("utf-8-sig").strip()
     if not decoded:
         raise ValueError("CSV file is empty.")
@@ -55,7 +64,7 @@ def parse_csv_rows(content: bytes) -> list[CallInputRow]:
         missing_columns = ", ".join(sorted(missing))
         raise ValueError(f"Missing required CSV columns: {missing_columns}")
 
-    rows: list[CallInputRow] = []
+    rows: list[CallInput] = []
     for index, raw_row in enumerate(reader, start=2):
         canonical_row: dict[str, str] = {}
         for original_key, value in raw_row.items():
@@ -67,12 +76,13 @@ def parse_csv_rows(content: bytes) -> list[CallInputRow]:
             continue
 
         try:
-            row = CallInputRow(
+            room_name_value = canonical_row.get("room_name") or None
+            row = CallInput(
+                phone_number=canonical_row["phone_number"],
                 name=canonical_row["name"],
-                room_id=canonical_row["room_id"],
-                monto_deuda=_parse_amount(canonical_row["monto_deuda"]),
-                fecha_limite=canonical_row["fecha_limite"],
-                telefono=canonical_row["telefono"],
+                debt_amount=_parse_amount(canonical_row["debt_amount"]),
+                due_date=canonical_row["due_date"],
+                room_name=room_name_value,
             )
         except Exception as exc:
             raise ValueError(f"Invalid row at line {index}: {exc}") from exc
@@ -94,7 +104,7 @@ def _normalize_header(value: str) -> str:
 def _parse_amount(value: str) -> float:
     raw = value.strip()
     if not raw:
-        raise ValueError("monto_deuda is empty")
+        raise ValueError("debt_amount is empty")
 
     sanitized = re.sub(r"[^0-9,.-]", "", raw)
     if sanitized.count(",") > 0 and sanitized.count(".") > 0:
@@ -104,5 +114,5 @@ def _parse_amount(value: str) -> float:
 
     amount = float(sanitized)
     if amount < 0:
-        raise ValueError("monto_deuda must be non-negative")
+        raise ValueError("debt_amount must be non-negative")
     return round(amount, 2)

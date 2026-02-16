@@ -1,16 +1,6 @@
-## LiveKit Mock - Simulador local por CSV
+## LiveKit Mock - Simulador local (JSON + CSV)
 
-Aplicacion local para simular llamadas de cobranza tipo mock y ver la salida en JSON.
-
-## Cambios clave
-
-- Entrada por CSV.
-- Transcript generado on-demand por cada fila.
-- Sentimiento del usuario aleatorio (positivo, neutro, negativo, agresivo, con insultos, etc.).
-- Agente siempre profesional y calmado.
-- **Sin webhook** por ahora: todo se procesa localmente y se muestra en una consola JSON en la UI.
-
----
+Servicio local para simular llamadas de cobranza y devolver un transcript con estructura tipo LiveKit.
 
 ## Requisitos
 
@@ -30,106 +20,131 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Abrir en navegador:
+UI local:
 
 `http://localhost:8000`
 
 ---
 
-## Formato de entrada CSV
+## Entrada por API JSON (nuevo formato principal)
 
-Columnas requeridas (se aceptan alias comunes):
+Endpoint:
 
-- `name` (persona)
-- `room_id`
-- `monto_deuda`
-- `fecha limite`
-- `telefono`
+`POST /api/simulate-call`
 
-Ejemplo:
-
-```csv
-name,room_id,monto_deuda,fecha limite,telefono
-Maria Lopez,room-001,12450.75,2026-03-05,+573001112233
-Juan Perez,room-002,9800,2026-03-11,+573004445566
-```
-
----
-
-## Salida por cada llamada
-
-```python
-transcript: Optional[Transcript]
-Outputs: {
-  room_name: str
-  call_tags: List[str]
-  participant_name: str
-  status: Optional[str]
-  call_duration_seconds: Optional[float]
-}
-```
-
-`call_tags` puede incluir etiquetas como:
-
-- `positiva`
-- `negativa`
-- `neutra`
-- `agresivo`
-- `insultos`
-- `compromiso_de_pago`
-- `indecision`
-- `seguimiento_requerido`
-- `resistencia_pago`
-- `estres_financiero`
-- `negociacion`
-- `posible_acuerdo`
-- `alto_riesgo`
-- `cliente_molesto`
-
----
-
-## API usada por la UI
-
-### `POST /api/simulate-csv`
-
-- Content-Type: `multipart/form-data`
-- Campo: `file` (archivo `.csv`)
-
-Ejemplo con curl:
-
-```bash
-curl -X POST "http://localhost:8000/api/simulate-csv" \
-  -F "file=@input.csv"
-```
-
-Respuesta ejemplo:
+Body esperado:
 
 ```json
 {
-  "input_rows": 1,
-  "results": [
-    {
-      "transcript": {
-        "language": "es",
-        "sentiment_profile": "agresiva_con_insultos",
-        "segments": [
-          {
-            "speaker": "agent",
-            "text": "Buenas tardes, le saluda Laura del equipo de cobranzas...",
-            "start_time_seconds": 0.48,
-            "end_time_seconds": 2.73
-          }
-        ],
-        "full_text": "..."
+  "phone_number": "+524771367757",
+  "name": "Carlos",
+  "debt_amount": "2300",
+  "due_date": "25-02-2026"
+}
+```
+
+> `debt_amount` puede enviarse como string o numero.
+
+---
+
+## Salida EXACTA (estructura)
+
+```json
+{
+  "room_name": "room-neZdGV5wnrtf",
+  "transcript": {
+    "items": [
+      {
+        "id": "item_4dc79f101ac5",
+        "type": "agent_handoff",
+        "new_agent_id": "outbound_caller"
       },
-      "Outputs": {
-        "room_name": "room-001",
-        "call_tags": ["agresivo", "insultos", "negativa", "intencion_futura"],
-        "participant_name": "Maria Lopez",
-        "status": "hostile_follow_up_required",
-        "call_duration_seconds": 21.0
+      {
+        "id": "item_2ee681cb97eb",
+        "type": "message",
+        "role": "user",
+        "content": ["Bueno."],
+        "interrupted": false,
+        "transcript_confidence": 1,
+        "extra": {},
+        "metrics": {
+          "started_speaking_at": 1771181838.28,
+          "stopped_speaking_at": 1771181838.53,
+          "transcription_delay": 0.36,
+          "end_of_turn_delay": 0.65,
+          "on_user_turn_completed_delay": 0.0000014
+        }
+      },
+      {
+        "id": "item_7b3d3883f601",
+        "type": "message",
+        "role": "assistant",
+        "content": ["Hola..."],
+        "interrupted": false,
+        "extra": {},
+        "metrics": {
+          "started_speaking_at": 1771181841.80,
+          "stopped_speaking_at": 1771181842.50,
+          "llm_node_ttft": 2.31,
+          "tts_node_ttfb": 0.58,
+          "e2e_latency": 3.27
+        }
+      },
+      {
+        "id": "item_50b36194fb86/fnc_0",
+        "type": "function_call",
+        "call_id": "call_d691el6lnift3qlthjc0",
+        "arguments": "{\"payment_amount\":\"1000\",\"payment_date\":\"24-02-2026\"}",
+        "name": "confirm_payment_custom",
+        "extra": {}
+      },
+      {
+        "id": "item_d0a6f433e44d",
+        "type": "function_call_output",
+        "name": "confirm_payment_custom",
+        "call_id": "call_d691el6lnift3qlthjc0",
+        "output": "custom_payment_confirmed",
+        "is_error": false
       }
-    }
+    ]
+  },
+  "status": "completed",
+  "call_tags": ["contestada", "pago_parcial"],
+  "participant_name": "+524771367757",
+  "call_duration_seconds": 115.5064709186554
+}
+```
+
+---
+
+## Entrada por CSV (para pruebas)
+
+Endpoint:
+
+`POST /api/simulate-csv`
+
+Columnas recomendadas:
+
+- `phone_number`
+- `name`
+- `debt_amount`
+- `due_date`
+
+CSV ejemplo:
+
+```csv
+phone_number,name,debt_amount,due_date
++524771367757,Carlos,2300,25-02-2026
++573001112233,Maria,1250.5,10-03-2026
+```
+
+Respuesta:
+
+```json
+{
+  "input_rows": 2,
+  "results": [
+    { "...": "mismo formato exacto de salida por llamada" }
   ]
 }
 ```

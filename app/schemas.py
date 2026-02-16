@@ -1,38 +1,28 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class CallInputRow(BaseModel):
+class CallInput(BaseModel):
+    phone_number: str = Field(..., min_length=1, max_length=50, description="Phone number")
     name: str = Field(..., min_length=1, max_length=255, description="Debtor name")
-    room_id: str = Field(..., min_length=1, max_length=255, description="Room identifier")
-    monto_deuda: float = Field(..., ge=0, description="Debt amount")
-    fecha_limite: str = Field(..., min_length=1, max_length=100, description="Payment due date")
-    telefono: str = Field(..., min_length=1, max_length=50, description="Phone number")
-
-
-class TranscriptSegment(BaseModel):
-    speaker: str = Field(..., min_length=1, max_length=20, description="Speaker role")
-    text: str = Field(..., min_length=1, description="Segment text")
-    start_time_seconds: float = Field(..., ge=0, description="Segment start second")
-    end_time_seconds: float = Field(..., ge=0, description="Segment end second")
+    debt_amount: float = Field(..., ge=0, description="Debt amount")
+    due_date: str = Field(..., min_length=1, max_length=100, description="Debt due date")
+    room_name: str | None = Field(
+        default=None, min_length=1, max_length=255, description="Optional room identifier override"
+    )
 
 
 class Transcript(BaseModel):
-    language: str = Field(default="es", min_length=2, max_length=10)
-    sentiment_profile: str = Field(..., min_length=1, max_length=100)
-    segments: list[TranscriptSegment] = Field(default_factory=list)
-    full_text: str = Field(..., min_length=1)
+    items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CallSimulationResult(BaseModel):
     room_name: str = Field(..., min_length=1, max_length=255, description="Room identifier")
+    transcript: Transcript = Field(default_factory=Transcript, description="Transcript item stream")
+    status: str = Field(default="completed", max_length=50, description="Call status")
     call_tags: list[str] = Field(default_factory=list, description="Tags associated with the call")
     participant_name: str = Field(..., min_length=1, max_length=255, description="Participant identifier")
-    transcript: Optional[Transcript] = Field(default=None, description="Full transcript data")
-    status: Optional[str] = Field(default=None, max_length=50, description="Call status")
-    call_duration_seconds: Optional[float] = Field(
-        default=None, description="Call duration in seconds (converted to integer)"
-    )
+    call_duration_seconds: float = Field(..., ge=0, description="Call duration in seconds")
